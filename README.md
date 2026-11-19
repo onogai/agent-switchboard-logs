@@ -26,6 +26,24 @@ shell code. Exported environment variables take precedence. The new project
 name and MCP alias default to `switchboard-logging` and
 `switchboard-logging-mcp`.
 
+## Update project selection after a Gateway migration
+
+Edit `LOGGING_COMPOSE_PROJECTS` in the existing private `.env` to
+include the independent projects: `switchboard-production`,
+`switchboard-services`, `switchboard-tasks`,
+`nogai-telegram-standalone`, and `switchboard-logging`.
+Keep any other projects you deliberately collect, but remove the retired
+`nogai-mcp-homelab` project. Then run:
+
+```bash
+./start-on-host.sh
+systemctl --user show switchboard-logging-refresh.service -p Environment
+```
+
+The installer regenerates Vector's source list and restarts only the
+lightweight host-side discovery watcher to apply the new project selection.
+It does not restart Core, Queue, Telegram or upstream services.
+
 ## Check
 
 ```bash

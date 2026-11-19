@@ -86,7 +86,10 @@ sed -e "s|@DEPLOY_ROOT@|$ROOT|g" \
     > "$HOME/.config/systemd/user/switchboard-logging-refresh.service"
 chmod 644 "$HOME/.config/systemd/user/switchboard-logging-refresh.service"
 systemctl --user daemon-reload
-systemctl --user enable --now switchboard-logging-refresh.service
+systemctl --user enable switchboard-logging-refresh.service
+# A running unit keeps its old Environment=PROJECTS until restarted.
+# Restart only the lightweight host refresh watcher; Vector/Logs stay up.
+systemctl --user restart switchboard-logging-refresh.service
 systemctl --user is-active --quiet switchboard-logging-refresh.service
 
 docker compose -f compose.yaml ps
