@@ -1,0 +1,102 @@
+name: ${LOGGING_PROJECT_NAME:-switchboard-logging}
+
+services:
+  victorialogs:
+    image: victoriametrics/victoria-logs:v1.54.0
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: "0.50"
+    command:
+      - -storageDataPath=/victoria-logs-data
+      - -retentionPeriod=5d
+      - -retention.maxDiskSpaceUsageBytes=512MiB
+      - -search.maxQueryDuration=10s
+      - -search.maxConcurrentRequests=2
+    ports:
+      - "127.0.0.1:19428:9428"
+    volumes:
+      - victorialogs-data:/victoria-logs-data
+    healthcheck:
+      test: ["CMD", "/victoria-logs-prod", "-healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  vector:
+    image: timberio/vector:0.61.0-alpine
+    restart: unless-stopped
+    user: "0:0"
+    mem_limit: 256m
+    cpus: "0.50"
+    command:
+      - --config
+      - /etc/vector/vector.toml
+      - --watch-config
+      - --watch-config-method
+      - poll
+      - --watch-config-poll-interval-seconds
+      - "15"
+    volumes:
+      - ${DOCKER_CONTAINERS_DIR:-/var/lib/docker/containers}:${DOCKER_CONTAINERS_DIR:-/var/lib/docker/containers}:ro
+      - ./generated:/etc/vector:ro
+      - vector-data:/var/lib/vector
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,noexec,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  mcp:
+    profiles: ["mcp"]
+    image: ghcr.io/victoriametrics/mcp-victorialogs:v1.9.0@sha256:753bb4fbe402ca1a782842f44636830f9895736f11d7fe783b924f8a0daf083d
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: "0.25"
+    environment:
+      VL_INSTANCE_ENTRYPOINT: http://victorialogs:9428
+      MCP_SERVER_MODE: http
+      MCP_LISTEN_ADDR: :8081
+      MCP_LOG_LEVEL: error
+      MCP_DISABLED_TOOLS: documentation,flags,stats_query,stats_query_range,stream_field_names,stream_field_values,stream_ids
+    networks:
+      default:
+      gateway:
+        aliases: [${LOGGING_MCP_ALIAS:-switchboard-logging-mcp}]
+      mcp_private:
+        aliases: [${LOGGING_MCP_ALIAS:-switchboard-logging-mcp}]
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,noexec,size=16m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+volumes:
+  victorialogs-data:
+  vector-data:
+
+networks:
+  gateway:
+    external: true
+    name: ${LOGGING_GATEWAY_NETWORK:?Set the existing Core network name}
+  mcp_private:
+    name: ${LOGGING_PRIVATE_NETWORK:-switchboard-logging-private}

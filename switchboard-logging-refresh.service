@@ -1,0 +1,16 @@
+[Unit]
+Description=Refresh Vector sources for selected Compose projects
+After=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=@DEPLOY_ROOT@
+Environment=DOCKER_CONTAINERS_DIR=@CONTAINERS_DIR@
+Environment=LOGGING_COMPOSE_PROJECTS=@PROJECTS@
+ExecStart=/usr/bin/python3 @DEPLOY_ROOT@/refresh.py --watch --interval 30
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target
