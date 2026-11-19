@@ -41,6 +41,21 @@ published port. The default Gateway source URL is
 URL in Manager if needed, and grant log queries only to the private
 `local-interactive` profile.
 
+## Register through the one-shot Docker discovery command
+
+The optional `mcp` service has opt-in Docker labels for Switchboard discovery.
+After starting it, from the **Core Gateway checkout on the Docker host**:
+
+```bash
+./switchboard mcp discover --dry-run
+./switchboard mcp discover
+```
+
+This command runs on demand using the host user's Docker permissions. It
+never polls in the background and does not grant tools automatically.
+If Gateway and Logging share multiple networks, specify the intended one
+using `--network`. An existing Registry source is left untouched.
+
 ## Replace an old installation without migrating data
 
 Downtime and historical data loss are acceptable. Stop/disable only the
