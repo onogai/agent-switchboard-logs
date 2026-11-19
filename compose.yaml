@@ -99,4 +99,5 @@ networks:
     external: true
     name: ${LOGGING_GATEWAY_NETWORK:?Set the existing Core network name}
   mcp_private:
+    external: true
     name: ${LOGGING_PRIVATE_NETWORK:-switchboard-logging-private}
