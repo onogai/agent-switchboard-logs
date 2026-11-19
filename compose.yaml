@@ -62,6 +62,10 @@ services:
 
   mcp:
     profiles: ["mcp"]
+    labels:
+      switchboard.mcp.enabled: "true"
+      switchboard.mcp.id: "logging"
+      switchboard.mcp.endpoint: "http://${LOGGING_MCP_ALIAS:-switchboard-logging-mcp}:8081/mcp"
     image: ghcr.io/victoriametrics/mcp-victorialogs:v1.9.0@sha256:753bb4fbe402ca1a782842f44636830f9895736f11d7fe783b924f8a0daf083d
     restart: unless-stopped
     mem_limit: 256m
