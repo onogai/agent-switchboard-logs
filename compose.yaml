@@ -75,9 +75,9 @@ services:
     networks:
       default:
       gateway:
-        aliases: [${LOGGING_MCP_ALIAS:-switchboard-logging-mcp}]
+        aliases: ["${LOGGING_MCP_ALIAS:-switchboard-logging-mcp}"]
       mcp_private:
-        aliases: [${LOGGING_MCP_ALIAS:-switchboard-logging-mcp}]
+        aliases: ["${LOGGING_MCP_ALIAS:-switchboard-logging-mcp}"]
     read_only: true
     tmpfs:
       - /tmp:rw,nosuid,noexec,size=16m
