@@ -1,54 +1,69 @@
 # Switchboard Logging
 
-An independent logging deployment for Docker Compose applications. The collector
-discovers only projects named in `LOGGING_COMPOSE_PROJECTS`, reads the local
-Docker JSON log files via read-only bind mounts, and ships them through Vector
-to VictoriaLogs. An optional private MCP exposes queries.
+Standalone Docker Compose logging: Vector, VictoriaLogs, host-side discovery
+and an optional private MCP. No Docker socket is mounted in the collector.
 
-## Configure
+## Fresh install
 
-Export these values in the shell running the installation. Use the **existing**
-Compose project/network/alias values when adopting an already deployed stack;
-changing them unexpectedly creates parallel containers or disconnects Gateway.
+On the Linux Docker host:
 
 ```bash
-export LOGGING_COMPOSE_PROJECTS=agent-switchboard,another-service
-export LOGGING_GATEWAY_NETWORK=agent-switchboard_default
-export LOGGING_PROJECT_NAME=switchboard-logging
-export LOGGING_PRIVATE_NETWORK=switchboard-logging-private
-export LOGGING_MCP_ALIAS=switchboard-logging-mcp
+git clone https://github.com/onogai/agent-switchboard-logs.git
+cd agent-switchboard-logs
+cp .env.example .env
+nano .env
 ./start-on-host.sh
 ```
 
-The Gateway source URL is `http://$LOGGING_MCP_ALIAS:8081/mcp` (substitute
-the actual configured alias). The MCP port is never published. Use a
-private local-interactive profile for log queries, not the public profiles.
-VictoriaLogs listens on loopback `127.0.0.1:19428` only.
+Edit `LOGGING_COMPOSE_PROJECTS` (comma-separated Docker Compose projects
+to collect) and `LOGGING_GATEWAY_NETWORK` (a network connected to Core).
+Set `LOGGING_PRIVATE_NETWORK` to the current local-interactive Gateway
+network when one exists. The installer reuses an existing private network
+or creates it when absent. No application containers are restarted.
 
-To inspect:
+The `.env` contains non-secret identifiers and is parsed without evaluating
+shell code. Exported environment variables take precedence. The new project
+name and MCP alias default to `switchboard-logging` and
+`switchboard-logging-mcp`.
+
+## Check
+
 ```bash
 systemctl --user status switchboard-logging-refresh.service
 docker compose -f compose.yaml ps
-docker compose -f compose.yaml logs --tail=50 victorialogs vector
+curl -fsS http://127.0.0.1:19428/health
+docker compose -f compose.yaml logs --tail=60 vector victorialogs mcp
 ```
 
-### Safe adoption of an existing logging deployment
+VictoriaLogs binds only to loopback port 19428. The optional MCP has no
+published port. The default Gateway source URL is
+`http://switchboard-logging-mcp:8081/mcp`. Update the Registry source
+URL in Manager if needed, and grant log queries only to the private
+`local-interactive` profile.
 
-The extraction contains source code but **does not migrate running containers,
-volumes, network aliases, systemd units, or the Gateway's stored source URL**.
-Before removing the original source checkout from the host:
+## Replace an old installation without migrating data
 
-1. Record the existing Compose project, mounted volumes, network names, MCP
-   alias and running systemd unit; do not print secrets.
-2. Copy this standalone checkout to a persistent directory.
-3. Set all `LOGGING_*` variables to match the current deployment. Check
-   `docker compose -f compose.yaml config`, including project/volumes/networks.
-4. Disable the original refresh service *after* the new checkout is ready,
-   then run `./start-on-host.sh`. Confirm the new unit and ingestion.
-5. Confirm the Gateway log source still responds. Remove only the old unit and
-   old source checkout after independent verification.
+Downtime and historical data loss are acceptable. Stop/disable only the
+previous logging refresh systemd unit. Remove containers whose
+`com.docker.compose.project` label matches the **old logging project**.
+Optionally remove that project's old VictoriaLogs/Vector volumes.
 
-Never use broad `docker compose down -v` or orphan removal against either
-project. Existing VictoriaLogs data and Vector checkpoints must survive.
-The collector does not have the Docker socket and does not recreate applications.
-The live log directory contains potentially sensitive data; restrict access.
+Do not remove the existing private Docker network while Core's
+`local-interactive` container is attached. Reuse it through
+`LOGGING_PRIVATE_NETWORK`; the new collector uses separate Compose
+containers and fresh data volumes.
+
+Do not use broad `docker compose down -v`, `--remove-orphans` or
+`docker system prune` across production projects. Core, Queue and
+Telegram are independent and must not be stopped during logging cleanup.
+
+## Operational limits
+
+Vector reads Docker's JSON log files through read-only mounts. The host
+refresh unit updates sources every 30 seconds. VictoriaLogs retention
+is five days, with a 512 MiB soft disk limit. Collector memory buffers
+are bounded and may drop excess events. Docker logs and query responses
+can contain sensitive values; restrict access to the log UI and MCP.
+
+The installer validates Compose, the Vector configuration and local
+readiness; it does not modify application databases or secrets.
