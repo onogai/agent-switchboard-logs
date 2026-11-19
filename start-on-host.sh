@@ -3,8 +3,32 @@ set -Eeuo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 cd "$ROOT"
-: "${LOGGING_COMPOSE_PROJECTS:?Export comma-separated Compose project names}"
-: "${LOGGING_GATEWAY_NETWORK:?Export the existing private Gateway network}"
+
+# Load only the known non-secret identifiers; never evaluate shell code.
+if [[ -f .env ]]; then
+  while IFS= read -r line || [[ -n $line ]]; do
+    [[ -z $line || "${line:0:1}" == "#" ]] && continue
+    [[ $line == *=* ]] || { echo "Invalid .env line (expected KEY=value)" >&2; exit 2; }
+    key="${line%%=*}"
+    value="${line#*=}"
+    case "$key" in
+      LOGGING_COMPOSE_PROJECTS|LOGGING_GATEWAY_NETWORK|LOGGING_PRIVATE_NETWORK|LOGGING_PROJECT_NAME|LOGGING_MCP_ALIAS) ;;
+      *) echo "Unknown .env setting: $key" >&2; exit 2 ;;
+    esac
+    [[ $value =~ ^[A-Za-z0-9_.,-]+$ ]] || {
+      echo "Invalid value for $key (names only)" >&2; exit 2;
+    }
+    if [[ -z ${!key:-} ]]; then
+      printf -v "$key" '%s' "$value"
+      export "$key"
+    fi
+  done < .env
+fi
+
+: "${LOGGING_COMPOSE_PROJECTS:?Set the Compose projects in .env}"
+: "${LOGGING_GATEWAY_NETWORK:?Set the Gateway Docker network in .env}"
+: "${LOGGING_PRIVATE_NETWORK:=switchboard-logging-private}"
+export LOGGING_PRIVATE_NETWORK
 
 if [[ $(uname -s) != Linux ]]; then
   echo 'Run on the Linux Docker host.' >&2
@@ -21,6 +45,12 @@ containers_dir=${DOCKER_CONTAINERS_DIR:-$docker_root/containers}
   exit 1
 }
 export DOCKER_CONTAINERS_DIR="$containers_dir"
+
+# Reuse the existing private network when the optional Core profile uses it.
+# Otherwise create an isolated private network for this installation.
+if ! docker network inspect "$LOGGING_PRIVATE_NETWORK" >/dev/null 2>&1; then
+  docker network create "$LOGGING_PRIVATE_NETWORK" >/dev/null
+fi
 
 python3 refresh.py
 docker compose -f compose.yaml config --quiet
