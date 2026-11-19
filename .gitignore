@@ -1,6 +1,7 @@
 generated/
 .env
 .env.*
+!.env.example
 __pycache__/
 *.pyc
 *.log

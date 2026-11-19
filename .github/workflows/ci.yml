@@ -9,3 +9,5 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m unittest discover -s tests -p 'test_*.py' -v
+      - run: bash -n start-on-host.sh sync-to-host.sh
+      - run: docker compose --env-file .env.example -f compose.yaml config --quiet
